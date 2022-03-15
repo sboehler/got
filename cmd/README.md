@@ -1,0 +1,1 @@
+An educational project following https://wyag.thb.lt/ in Go.
