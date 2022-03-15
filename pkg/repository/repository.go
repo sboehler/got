@@ -63,11 +63,16 @@ func Init(path string) (*Repository, error) {
 	defer head.Close()
 	head.WriteString("ref: refs/heads/master\n")
 
-	if err := defaultConfig().SaveTo(repoPath(path, "config")); err != nil {
+	config := defaultConfig()
+	if err := config.SaveTo(repoPath(path, "config")); err != nil {
 		return nil, err
 	}
 
-	return nil, nil
+	return &Repository{
+		Worktree: path,
+		GitDir:   repoPath(path),
+		Config:   config,
+	}, nil
 }
 
 func repoPath(path string, segments ...string) string {
