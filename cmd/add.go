@@ -1,7 +1,4 @@
-/*
-Copyright © 2022 NAME HERE <EMAIL ADDRESS>
-
-*/
+// Package cmd implements commands.
 package cmd
 
 import (
