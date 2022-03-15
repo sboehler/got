@@ -75,8 +75,49 @@ func Init(path string) (*Repository, error) {
 	}, nil
 }
 
+// Load loads the repository at path.
+func Load(path string) (*Repository, error) {
+	config, err := ini.Load(repoPath(path, "config"))
+	if err != nil {
+		return nil, err
+	}
+	return &Repository{
+		Worktree: path,
+		GitDir:   repoPath(path),
+		Config:   config,
+	}, nil
+}
+
 func repoPath(path string, segments ...string) string {
 	return filepath.Join(append([]string{path, ".git"}, segments...)...)
+}
+
+// Find loads the repository at path or any of its parent directories.
+func Find(path string) (*Repository, error) {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	gitPath := filepath.Join(path, ".git")
+	if s, err := os.Stat(gitPath); err != nil && s.IsDir() {
+		config, err := ini.Load(repoPath(path, "config"))
+		if err != nil {
+			return nil, err
+		}
+		return &Repository{
+			Worktree: path,
+			GitDir:   repoPath(path),
+			Config:   config,
+		}, nil
+	}
+	parent, err := filepath.Abs(filepath.Join(path, ".."))
+	if err != nil {
+		return nil, err
+	}
+	if parent == path {
+		return nil, fmt.Errorf("could not find parent git directory")
+	}
+	return Find(parent)
 }
 
 func defaultConfig() *ini.File {
