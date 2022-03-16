@@ -23,6 +23,10 @@ const dirperms = 0775
 
 // Init initializes a new got repository.
 func Init(path string) (*Repository, error) {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid path")
+	}
 	if s, err := os.Stat(path); err == nil {
 		if !s.IsDir() {
 			return nil, fmt.Errorf("%s is not a directory", path)
@@ -77,6 +81,10 @@ func Init(path string) (*Repository, error) {
 
 // Load loads the repository at path.
 func Load(path string) (*Repository, error) {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid path")
+	}
 	config, err := ini.Load(repoPath(path, "config"))
 	if err != nil {
 		return nil, err
@@ -96,7 +104,7 @@ func repoPath(path string, segments ...string) string {
 func Find(path string) (*Repository, error) {
 	path, err := filepath.Abs(path)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "invalid path")
 	}
 	gitPath := filepath.Join(path, ".git")
 	if s, err := os.Stat(gitPath); err != nil && s.IsDir() {
