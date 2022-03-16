@@ -19,6 +19,11 @@ type Repository struct {
 	Config   *ini.File
 }
 
+// GitPath returns the path to a file in the repository.
+func (r *Repository) GitPath(ss ...string) string {
+	return repoPath(r.GitDir, ss...)
+}
+
 const dirperms = 0775
 
 // Init initializes a new got repository.
