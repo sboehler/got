@@ -3,6 +3,7 @@ module github.com/sboehler/got
 go 1.18
 
 require (
+	github.com/natefinch/atomic v1.0.1
 	github.com/pkg/errors v0.8.1
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/viper v1.10.1

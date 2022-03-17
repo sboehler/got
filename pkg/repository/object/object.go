@@ -3,11 +3,16 @@ package object
 
 import (
 	"bufio"
+	"bytes"
 	"compress/zlib"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 
+	"github.com/natefinch/atomic"
 	"github.com/pkg/errors"
 	"github.com/sboehler/got/pkg/repository"
 )
@@ -54,4 +59,56 @@ func Load(r *repository.Repository, sha string) (Object, error) {
 	default:
 		return nil, fmt.Errorf("invalid object tag: %q", s)
 	}
+}
+
+// Write writes an object to the repository.
+func Write(repo *repository.Repository, o Object) error {
+	var typeID string
+	switch t := o.(type) {
+	case *Blob:
+		typeID = "blob"
+	default:
+		return fmt.Errorf("unknown object type: %T", t)
+	}
+	data := o.Serialize()
+	header := createHeader(typeID, data)
+
+	hasher := sha1.New()
+	hasher.Write(header)
+	hasher.Write(data)
+	hash := hex.EncodeToString(hasher.Sum(nil))
+
+	f := repo.GitPath("objects", hash[:2], hash[2:])
+	r := io.MultiReader(bytes.NewReader(header), bytes.NewReader(data))
+	err := atomic.WriteFile(f, r)
+	return errors.Wrapf(err, "error writing object %s", hash)
+}
+
+// createPayload returns the bytes to be written and the sha1 hash in
+// hexadecimal format.
+func createHeader(typeID string, data []byte) []byte {
+	var b bytes.Buffer
+	b.WriteString(typeID)
+	b.WriteByte(0x20)
+	b.WriteString(strconv.FormatInt(int64(len(data)), 10))
+	b.WriteByte(0x00)
+	return b.Bytes()
+}
+
+// Blob represents a blob.
+type Blob struct {
+	data []byte
+}
+
+var _ Object = (*Blob)(nil)
+
+// Deserialize implements Object.
+func (b *Blob) Deserialize(bs []byte) error {
+	b.data = bs
+	return nil
+}
+
+// Serialize implements Object.
+func (b *Blob) Serialize() []byte {
+	return b.data
 }
