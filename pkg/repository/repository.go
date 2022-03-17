@@ -2,11 +2,14 @@
 package repository
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/natefinch/atomic"
 	"github.com/pkg/errors"
 
 	"gopkg.in/ini.v1"
@@ -58,23 +61,22 @@ func Init(path string) (*Repository, error) {
 		}
 	}
 
-	desc, err := os.Create(repoPath(path, "description"))
+	err = atomic.WriteFile(repoPath(path, "description"), strings.NewReader("Unnamed repository; edit this file 'description' to name the repository.\n"))
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "error writing %s", repoPath(path, "description"))
 	}
-	defer desc.Close()
-	desc.WriteString("Unnamed repository; edit this file 'description' to name the repository.\n")
 
-	head, err := os.Create(repoPath(path, "HEAD"))
+	err = atomic.WriteFile(repoPath(path, "HEAD"), strings.NewReader("ref: refs/heads/master\n"))
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "error writing %s", repoPath(path, "HEAD"))
 	}
-	defer head.Close()
-	head.WriteString("ref: refs/heads/master\n")
 
 	config := defaultConfig()
-	if err := config.SaveTo(repoPath(path, "config")); err != nil {
-		return nil, err
+	var cb bytes.Buffer
+	config.WriteTo(&cb)
+	err = atomic.WriteFile(repoPath(path, "config"), &cb)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error writing %s", repoPath(path, "config"))
 	}
 
 	return &Repository{
@@ -112,7 +114,7 @@ func Find(path string) (*Repository, error) {
 		return nil, errors.Wrap(err, "invalid path")
 	}
 	gitPath := filepath.Join(path, ".git")
-	if s, err := os.Stat(gitPath); err != nil && s.IsDir() {
+	if s, err := os.Stat(gitPath); err == nil && s.IsDir() {
 		config, err := ini.Load(repoPath(path, "config"))
 		if err != nil {
 			return nil, err
