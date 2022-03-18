@@ -24,7 +24,7 @@ type Repository struct {
 
 // GitPath returns the path to a file in the repository.
 func (r *Repository) GitPath(ss ...string) string {
-	return repoPath(r.GitDir, ss...)
+	return repoPath(r.Worktree, ss...)
 }
 
 const dirperms = 0775

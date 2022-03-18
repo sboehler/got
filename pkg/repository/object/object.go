@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strconv"
 
@@ -21,6 +22,7 @@ import (
 type Object interface {
 	Serialize() []byte
 	Deserialize([]byte) error
+	Type() string
 }
 
 // Load loads an object from the repository.
@@ -47,12 +49,12 @@ func Load(r *repository.Repository, sha string) (Object, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid size")
 	}
-	switch s := string(ot[:len(ot)-1]); s {
+	switch s := string(ot); s {
+	case "blob":
+		return NewBlob(br)
 	// case "commit":
 	// 	return nil, nil
 	// case "tree":
-	// 	return nil, nil
-	// case "blob":
 	// 	return nil, nil
 	// case "tag":
 	// 	return nil, nil
@@ -100,6 +102,14 @@ type Blob struct {
 	data []byte
 }
 
+func NewBlob(r io.Reader) (*Blob, error) {
+	data, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	return &Blob{data}, nil
+}
+
 var _ Object = (*Blob)(nil)
 
 // Deserialize implements Object.
@@ -111,4 +121,13 @@ func (b *Blob) Deserialize(bs []byte) error {
 // Serialize implements Object.
 func (b *Blob) Serialize() []byte {
 	return b.data
+}
+
+func (Blob) Type() string {
+	return "blob"
+}
+
+// Find resolves the given object reference.
+func Find(r *repository.Repository, name string, ot string, follow bool) string {
+	return name
 }
