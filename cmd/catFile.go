@@ -16,7 +16,6 @@ import (
 var catFileCmd = &cobra.Command{
 	Use:   "cat-file TYPE OBJECT",
 	Short: "Provide content of repository objects",
-	Long:  ``,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		wd, err := os.Getwd()
 		if err != nil {
