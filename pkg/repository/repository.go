@@ -2,15 +2,22 @@
 package repository
 
 import (
+	"bufio"
 	"bytes"
+	"compress/zlib"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/natefinch/atomic"
 	"github.com/pkg/errors"
+	"github.com/sboehler/got/pkg/object"
 
 	"gopkg.in/ini.v1"
 )
@@ -142,4 +149,136 @@ func defaultConfig() *ini.File {
 	core.Key("filemode").SetValue("false")
 	core.Key("bare").SetValue("false")
 	return f
+}
+
+// Object represents an object.
+type Object interface {
+	Serialize() []byte
+	Deserialize([]byte) error
+}
+
+// LoadObject loads an object from the repository.
+func (r *Repository) LoadObject(sha string, objectType string) (Object, error) {
+	f, err := os.Open(r.GitPath("objects", sha[:2], sha[2:]))
+	if err != nil {
+		return nil, errors.Wrapf(err, "error loading object %s", sha)
+	}
+	defer f.Close()
+	zr, err := zlib.NewReader(f)
+	if err != nil {
+		return nil, err
+	}
+	of, err := ReadObjectFile(bufio.NewReader(zr))
+	if of.ObjectType != objectType {
+		return nil, fmt.Errorf("wrong object type %s, want %s", of.ObjectType, objectType)
+	}
+	switch of.ObjectType {
+	case "blob":
+		return object.NewBlob(of.Data), nil
+	default:
+		return nil, fmt.Errorf("unsupported object type %s", of.ObjectType)
+	}
+}
+
+// WriteObject writes the given object to the repository.
+func (r *Repository) WriteObject(of *ObjectFile) (string, error) {
+	var (
+		buf bytes.Buffer
+		w   = zlib.NewWriter(&buf)
+	)
+	if _, err := of.Write(w); err != nil {
+		return "", err
+	}
+	w.Close()
+	hash := Hash(of)
+	f := r.GitPath("objects", hash[:2], hash[2:])
+	err := atomic.WriteFile(f, &buf)
+	return hash, errors.Wrapf(err, "error writing object %s", hash)
+}
+
+// Hash hashes the object.
+func Hash(of *ObjectFile) string {
+	hasher := sha1.New()
+	of.Write(hasher)
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+// Find resolves the given object reference.
+func (r *Repository) Find(name string, ot string, follow bool) string {
+	return name
+}
+
+// ObjectFile defines the wire format for storing objects in the repository.
+type ObjectFile struct {
+	ObjectType string
+	Data       []byte
+}
+
+var validObjectType = map[string]struct{}{
+	"blob": {},
+}
+
+// ReadObjectFile reads an object file from a reader.
+func ReadObjectFile(r *bufio.Reader) (*ObjectFile, error) {
+	bs, err := r.ReadBytes(0x20)
+	if err != nil {
+		return nil, errors.Wrap(err, "couldn't read object type")
+	}
+	ot := string(bs[:len(bs)-1])
+	if _, ok := validObjectType[ot]; !ok {
+		return nil, fmt.Errorf("invalid object type %s", ot)
+	}
+	bs, err = r.ReadBytes(0x00)
+	if err != nil {
+		return nil, errors.Wrap(err, "couldn't read object size")
+	}
+	size, err := strconv.ParseInt(string(bs[:len(bs)-1]), 10, 64)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid size")
+	}
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, errors.Wrap(err, "couldn't read data")
+	}
+	if int64(len(data)) != size {
+		return nil, fmt.Errorf("len(data) == %d, want %d", len(data), size)
+	}
+	return &ObjectFile{
+		ObjectType: ot,
+		Data:       data,
+	}, nil
+}
+
+func (of *ObjectFile) Write(w io.Writer) (int64, error) {
+	var (
+		total int64
+		n     int
+		err   error
+	)
+	n, err = io.WriteString(w, of.ObjectType)
+	total += (int64)(n)
+	if err != nil {
+		return total, err
+	}
+	n, err = w.Write([]byte{0x20})
+	total += (int64)(n)
+	if err != nil {
+		return total, err
+	}
+	n, err = io.WriteString(w, strconv.FormatInt(int64(len(of.Data)), 10))
+	total += (int64)(n)
+	if err != nil {
+		return total, err
+	}
+	n, err = w.Write([]byte{0x00})
+	total += (int64)(n)
+	if err != nil {
+		return total, err
+	}
+	n64, err := io.Copy(w, bytes.NewReader(of.Data))
+	total += n64
+	if err != nil {
+		return total, err
+	}
+	return total, nil
 }

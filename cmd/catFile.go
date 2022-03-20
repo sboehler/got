@@ -3,12 +3,10 @@ package cmd
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 
 	"github.com/sboehler/got/pkg/repository"
-	"github.com/sboehler/got/pkg/repository/object"
 	"github.com/spf13/cobra"
 )
 
@@ -25,12 +23,9 @@ var catFileCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		o, err := object.Load(r, object.Find(r, args[1], args[0], false))
+		o, err := r.LoadObject(r.Find(args[1], args[0], false), args[0])
 		if err != nil {
 			return err
-		}
-		if args[0] != o.Type() {
-			return fmt.Errorf("bad object: %s", args[1])
 		}
 		_, err = io.Copy(cmd.OutOrStdout(), bytes.NewReader(o.Serialize()))
 		return err

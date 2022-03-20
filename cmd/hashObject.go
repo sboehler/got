@@ -8,26 +8,63 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/sboehler/got/pkg/object"
+	"github.com/sboehler/got/pkg/repository"
 	"github.com/spf13/cobra"
 )
 
 // hashObjectCmd represents the hashObject command
-var hashObjectCmd = &cobra.Command{
-	Use:   "hashObject",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+var (
+	objectType string
+	write      bool
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("hashObject called")
-	},
-}
+	hashObjectCmd = &cobra.Command{
+		Use:   "hash-object OBJECT",
+		Short: "Provide content of repository objects",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			f, err := os.ReadFile(args[0])
+			if err != nil {
+				return err
+			}
+			var o repository.Object
+			switch objectType {
+			case "blob":
+				o = object.NewBlob(f)
+			default:
+				return fmt.Errorf("invalid object type: %s", objectType)
+			}
+			of := &repository.ObjectFile{
+				Data:       o.Serialize(),
+				ObjectType: objectType,
+			}
+			var hash string
+			if write {
+				wd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				r, err := repository.Find(wd)
+				if err != nil {
+					return err
+				}
+				if hash, err = r.WriteObject(of); err != nil {
+					return err
+				}
+			} else {
+				hash = repository.Hash(of)
+			}
+			fmt.Println(hash)
+			return nil
+		},
+		Args: cobra.ExactArgs(1),
+	}
+)
 
 func init() {
+	hashObjectCmd.Flags().StringVarP(&objectType, "type", "t", "blob", "specify tye type")
+	hashObjectCmd.Flags().BoolVarP(&write, "write", "w", false, "write the file to the object database")
 	rootCmd.AddCommand(hashObjectCmd)
 
 	// Here you will define your flags and configuration settings.
